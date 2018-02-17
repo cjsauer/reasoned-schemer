@@ -8,22 +8,25 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-false
-true
+false ;; #t
+true  ;; #f
 
 ;; a goal that succeeds
 ;; "succeed"
 s#
+;; => #function[clojure.core.logic/succeed]
 
 ;; a goal that fails; it is unsuccessful
 ;; "fail"
 u#
+;; => #function[clojure.core.logic/fail]
 
+;; run expressions have the value '() when all goals fail
 (run* [q]
   u#)
 ;; => ()
 
-;; q is associated with `true` if `==` succeeds
+;; q is associated with `true` if `==` (unification) succeeds
 (run* [q]
   (== true q))
 ;; => (true)
@@ -54,6 +57,7 @@ u#
   (== false q))
 ;; => (false)
 
+;; fails because `true` is not equal to `false`
 (run* [x]
   (let [x true]
     (== x false)))

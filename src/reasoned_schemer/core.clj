@@ -1,6 +1,7 @@
 (ns reasoned-schemer.core
-  (:refer-clojure :exclude [==])
-  (:require [clojure.core.logic :as l :refer [run* run s# u# == fresh conde]]))
+  (:refer-clojure :exclude [== identity])
+  (:require [clojure.core.logic
+             :as l :refer [run* run s# u# == fresh conde firsto resto lcons lcons? llist conso emptyo nilo]]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -320,3 +321,711 @@ u#
            (s# (== false q)))]
     b))
 ;; => (false)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; 2. Teaching Old Toys New Tricks
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(let [x (fn [a] a)
+      y 'c]
+  (x y))
+;; => c
+
+;; Slightly shorter syntax than (cons x (cons y ...))
+(run* [r]
+  (fresh [y x]
+    (== `(~x ~y) r)))
+;; => ((_0 _1))
+
+(run* [r]
+  (fresh [v w]
+    (let [x v
+          y w]
+      (== `(~x ~y) r))))
+;; => ((_0 _1))
+
+;; `car` in Scheme is `first` in Clojure
+(first '(grape raisin pear))
+;; => grape
+
+(first '(a c o r n))
+;; => a
+
+(run* [r]
+  (firsto '(a c o r n) r))
+;; => (a)
+
+(run* [q]
+  (firsto '(a c o r n) 'a) ;; 'a is indeed the first of '(a c o r n), therefore success!
+  (== true q))
+;; => (true)
+
+(run* [r]
+  (fresh [x y]
+    (firsto `(~r ~y) x)
+    (== 'pear x)))
+;; => (pear)
+
+;; Implementation of `firsto`
+(defn firsto*
+  [p a]
+  (fresh [d]
+    (== (lcons a d) p)))
+
+(run* [r]
+  (fresh [x y]
+    (firsto* `(~r ~y) x)
+    (== 'pear x)))
+;; => (pear)
+
+(cons
+ (first '(grape raisin pear))
+ (first '((a) (b) (c))))
+;; => (grape a)
+
+(run* [r]
+  (fresh [x y]
+    (firsto '(grape raisin pear) x)
+    (firsto '((a) (b) (c)) y)
+    (== (lcons x y) r)))
+;; => ((grape a))
+
+(rest '(grape raisin pear))
+;; => (raisin pear)
+
+(first (rest '(a c o r n)))
+;; => c
+
+;; The process of transforming (first (rest ...)) into (rest l v) and (first v r) is
+;; called "unnesting"
+(run* [r]
+  (fresh [v]
+    (resto '(a c o r n) v)
+    (firsto v r)))
+;; => (c)
+
+;; Implementation of `resto`
+(defn resto*
+  [p d]
+  (fresh [a]
+    (== (lcons a d) p)))
+
+(run* [r]
+  (fresh [v]
+    (resto* '(a c o r n) v)
+    (firsto* v r)))
+;; => (c)
+
+(cons
+ (rest '(grape raisin pear))
+ (first '((a) (b) (c))))
+;; => ((raisin pear) a)
+
+(run* [r]
+  (fresh [x y]
+    (resto '(grape raisin pear) x)
+    (firsto '((a) (b) (c)) y)
+    (== (lcons x y) r)))
+;; => (((raisin pear) a))
+
+(run* [q]
+  (resto '(a c o r n) '(c o r n))  ;; '(c o r n) is indeed the rest of '(a c o r n), therefore success!
+  (== true q))
+;; => (true)
+
+(run* [x]
+  (resto '[c o r n] [x 'r 'n]))
+;; => (o)
+
+(run* [l]
+  (fresh [x]
+    (resto l '(c o r n))
+    (firsto l x)
+    (== 'a x)))
+;; => ((a c o r n))
+
+(run* [l]
+  (conso '(a b c) '(d e) l))
+;; => (((a b c) d e))
+
+(run* [x]
+  (conso x '(a b c) '(d a b c)))
+;; => (d)
+
+(run* [r]
+  (fresh [x y z]
+    (== ['e 'a 'd x] r)
+    (conso y ['a z 'c] r)))
+;; => ([e a d c])
+
+(run* [x]
+  (conso x ['a x 'c] ['d 'a x 'c]))
+;; => (d)
+
+(run* [l]
+  (fresh [x]
+    (== ['d 'a x 'c] l)
+    (conso x ['a x 'c] l)))
+;; => ([d a d c])
+
+(run* [l]
+  (fresh [x]
+    (conso x ['a x 'c] l)
+    (== ['d 'a x 'c] l)))
+;; => ((d a d c))
+
+(defn conso*
+  [a d p]
+  (== (lcons a d) p))
+
+(run* [l]
+  (fresh [x]
+    (conso* x ['a x 'c] l)
+    (== ['d 'a x 'c] l)))
+;; => ((d a d c))
+
+(run* [l]
+  (fresh [d x y w s]
+    (conso w '(a n s) s)
+    (resto l s)
+    (firsto l x)
+    (== 'b x)
+    (firsto s y)
+    (== 'e y)))
+;; => ((b e a n s))
+
+(empty? '(grape raisin pear))
+;; => false
+
+(empty? '())
+;; => true
+
+(run* [q]
+  (emptyo '(grape raisin pear))
+  (== true q))
+;; => ()
+
+(run* [q]
+  (emptyo '())
+  (== true q))
+;; => (true)
+
+(run* [x]
+  (emptyo x))
+;; => (())
+
+(defn emptyo*
+  [x]
+  (== x '()))
+
+(run* [q]
+  (emptyo* '(grape raisin pear))
+  (== true q))
+;; => ()
+
+(run* [x]
+  (emptyo* x))
+;; => (())
+
+(= 'pear 'plum)
+;; => false
+
+(= 'plum 'plum)
+;; => true
+
+(defn eqo
+  [x y]
+  (== x y))
+
+(run* [q]
+  (eqo 'pear 'plum)
+  (== true q))
+;; => ()
+
+(run* [q]
+  (eqo 'plum 'plum)
+  (== true q))
+;; => (true)
+
+(lcons 'split 'pea)
+;; => (split . pea)
+
+(first '(pear))
+;; => pear
+
+(rest '(pear))
+;; => ()
+
+(defn pair?
+  [x]
+  (or (lcons? x) (and (coll? x) (seq x))))
+
+(lcons '(split) 'pea)
+;; => ((split) . pea)
+
+(pair? (lcons '(split) 'pea))
+;; => true
+
+(pair? '())
+;; => nil
+
+(pair? 'pair)
+;; => false
+
+(pair? 'pear)
+;; => false
+
+(lcons 'pear '())
+;; => (pear)
+
+(pair? (lcons 'pear '()))
+;; => (pear)
+
+(run* [r]
+  (fresh [x y]
+    (== (lcons x (lcons y 'salad)) r)))
+;; => ((_0 _1 . salad))
+
+(defn pairo
+  [p]
+  (fresh [a d]
+    (conso* a d p)))
+
+(run* [q]
+  (pairo (lcons q q))
+  (== true q))
+;; => (true)
+
+(run* [q]
+  (pairo '())  ;; the empty list is not a pair!
+  (== true q))
+;; => ()
+
+(run* [q]
+  (pairo 'pair)
+  (== true q))
+;; => ()
+
+(run* [q]
+  (pairo q))
+;; => ((_0 . _1))
+
+(run* [r]
+  (pairo (lcons r 'pear)))
+;; => (_0)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; 3. Seeing Old Friends in New Ways
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; https://github.com/clojure/core.logic/wiki/Differences-from-The-Reasoned-Schemer
+;; NOTE: In Clojure, it is more appropriate to use `seq?` than `list?` This is
+;; because proper list-like things and pairs are not conflated in Clojure as
+;; they are in Scheme.
+
+(seq? '((a) (a b) c))
+;; => true
+
+(seq? '())
+;; => true
+
+(seq? 's)
+;; => false
+
+(llist 'd 'a 't 'e 's) ;; not a "proper" list
+;; => (d a t e . s)
+(seq? (llist 'd 'a 't 'e 's)) ;; and so is not a seq
+;; => false
+
+(defn listo
+  [l]
+  (conde
+   ((emptyo l) s#)
+   ((pairo l) (fresh [d]
+                (resto l d)
+                (listo d)))
+   (s# u#)))
+
+(run* [x]
+  (listo (list 'a 'b x 'd)))
+;; => (_0)
+
+(run 1 [x]
+  (listo (llist 'a 'b 'c x)))
+;; => (())
+
+(run 5 [x]
+  (listo (llist 'a 'b 'c x)))
+;; => (() (_0) (_0 _1) (_0 _1 _2) (_0 _1 _2 _3))
+
+(defn lol?
+  "list-of-lists?"
+  [l]
+  (cond
+    (empty? l) true
+    (seq? (first l)) (lol? (rest l))
+    :else false))
+
+(lol? '(() (1) (2)))
+;; => true
+
+(lol? '(() 1 2))
+;; => false
+
+;; Switching to using vectors as the `conde` clauses for readability here...
+(defn lolo
+  [l]
+  (conde
+   [(emptyo l) s#]
+   [(fresh [a]
+      (firsto l a)
+      (listo a))
+    (fresh [b]
+      (resto l b)
+      (lolo b))]
+   [s# u#]))
+
+(run 1 [l]
+  (lolo l))
+;; => (())
+
+(run* [q]
+  (fresh [x y]
+    (lolo (list '(a b) (list x 'c) (list 'd y)))
+    (== true q)))
+;; => (true)
+
+(run 1 [q]
+  (fresh [x]
+    (lolo (llist '(a b) x))
+    (== true q)))
+;; => (true)
+
+(run 1 [x]
+  (lolo (llist '(a b) '(c d) x)))
+;; => (())
+
+;; Borrowed from:
+;; https://github.com/candera/reasoned-schemer/blob/master/src/reasoned_schemer/chapter3.clj
+;;
+;; TRS has this as
+;; (()
+;;  (())
+;;  (() ())
+;;  (() () ())
+;;  (() () () ())
+;;
+;; The reason for the difference is that conde in the book is a
+;; depth-first search where conde in core.logic is an interleaving
+;; one.
+
+(run 5 [x]
+  (lolo (llist '(a b) '(c d) x)))
+;; => (()
+;;     (())
+;;     ((_0))
+;;     (() ())
+;;     ((_0 _1)))
+
+(defn twinso
+  [s]
+  (fresh [x y]
+    (conso x y s)
+    (conso x '() y)))
+
+(run* [q]
+  (twinso '(tofu tofu))
+  (== true q))
+;; => (true)
+
+(run* [z]
+  (twinso (list z 'tofu)))
+;; => (tofu)
+
+;; Implementation without `conso`
+(defn twinso*
+  [s]
+  (fresh [x y]
+    (== s (list x x))))
+
+(run* [z]
+  (twinso* (list z 'tofu)))
+;; => (tofu)
+
+(defn loto
+  [l]
+  (conde
+   [(emptyo l) s#]
+   [(fresh [a]
+      (firsto l a)
+      (twinso a))
+    (fresh [d]
+      (resto l d)
+      (loto d))]
+   [s# u#]))
+
+(run 1 [z]
+  (loto (llist '(g g) z)))
+;; => (())
+
+(run 5 [z]
+  (loto (llist '(g g) z)))
+;; => (()
+;;    ((_0 _0))
+;;    ((_0 _0) (_1 _1))
+;;    ((_0 _0) (_1 _1) (_2 _2))
+;;    ((_0 _0) (_1 _1) (_2 _2) (_3 _3)))
+
+(run 5 [r]
+  (fresh [w x y z]
+    (loto (llist '(g g) (list 'e w) (list x y) z))
+    (== (list w (list x y) z) r)))
+;; => ((e (_0 _0) ())
+;;     (e (_0 _0) ((_1 _1)))
+;;     (e (_0 _0) ((_1 _1) (_2 _2)))
+;;     (e (_0 _0) ((_1 _1) (_2 _2) (_3 _3)))
+;;     (e (_0 _0) ((_1 _1) (_2 _2) (_3 _3) (_4 _4))))
+
+(run 3 [out]
+  (fresh [w x y z]
+    (== (llist '(g g) (list 'e w) (list x y) z) out)
+    (loto out)))
+;; => (((g g) (e e) (_0 _0))
+;;     ((g g) (e e) (_0 _0) (_1 _1))
+;;     ((g g) (e e) (_0 _0) (_1 _1) (_2 _2)))
+
+(defn listofo
+  [predo l]
+  (conde
+   [(emptyo l) s#]
+   [(fresh [a]
+      (firsto l a)
+      (predo a))
+    (fresh [d]
+      (resto l d)
+      (listofo predo d))]
+   [s# u#]))
+
+(run 3 [out]
+  (fresh [w x y z]
+    (== (llist '(g g) (list 'e w) (list x y) z) out)
+    (listofo twinso out)))
+;; => (((g g) (e e) (_0 _0))
+;;     ((g g) (e e) (_0 _0) (_1 _1))
+;;     ((g g) (e e) (_0 _0) (_1 _1) (_2 _2)))
+
+;; redefine `loto` using `listofo`
+(defn loto
+  [l]
+  (listofo twinso l))
+
+(run 1 [z]
+  (loto (llist '(g g) z)))
+;; => (())
+
+(defn eq-first?
+  [l x]
+  (= x (first l)))
+
+(defn member?
+  [x l]
+  (cond
+    (empty? l) false
+    (eq-first? l x) true
+    :else (member? x (rest l))))
+
+(member? 'olive '(virgin olive oil))
+;; => true
+
+(defn eq-firsto
+  [l x]
+  (firsto l x))
+
+(defn membero
+  [x l]
+  (conde
+   ;; [(emptyo l) u#]    <-- `conde` lines guaranteed to fail are unnecessary
+   [(eq-firsto l x) s#]
+   [s# (fresh [d]
+         (resto l d)
+         (membero x d))]))
+
+(run* [q]
+  (membero 'olive '(virgin olive oil))
+  (== true q))
+;; => (true)
+
+(run 1 [y]
+  (membero y '(hummus with pita)))
+;; => (hummus)
+
+(run 1 [y]
+  (membero y '(with pita)))
+;; => (with)
+
+(run 1 [y]
+  (membero y '(pita)))
+;; => (pita)
+
+(run* [y]
+  (membero y '()))
+;; => ()
+
+(defn identity
+  [l]
+  (run* [y]
+    (membero y l)))
+
+(run* [x]
+  (membero 'e (list 'pasta x 'fagioli)))
+;; => (e)
+
+;; Recursion succeeds _before_ it gets to variable x
+(run 1 [x]
+  (membero 'e (list 'pasta 'e x 'fagioli)))
+;; => (_0)
+
+;; Recursion succeeds _when_ it gets to variable x
+(run 1 [x]
+  (membero 'e (list 'pasta x 'e 'fagioli)))
+;; => (e)
+
+(run* [r]
+  (fresh [x y]
+    (membero 'e (list 'pasta x 'fagioli y))
+    (== (list x y) r)))
+;; => ((e _0) (_0 e))
+
+(run 1 [l]
+  (membero 'tofu l))
+;; => ((tofu . _0))
+
+(run 5 [l]
+  (membero 'tofu l))
+;; => ((tofu . _0)
+;;     (_0 tofu . _1)
+;;     (_0 _1 tofu . _2)
+;;     (_0 _1 _2 tofu . _3)
+;;     (_0 _1 _2 _3 tofu . _4))
+
+(defn pmembero
+  [x l]
+  (conde
+   [(emptyo l) u#]
+   [(eq-firsto l x) (resto l '())]
+   [s# (fresh [d]
+         (resto l d)
+         (pmembero x d))]))
+
+(run 5 [l]
+  (pmembero 'tofo l))
+;; => ((tofo)
+;;     (_0 tofo)
+;;     (_0 _1 tofo)
+;;     (_0 _1 _2 tofo)
+;;     (_0 _1 _2 _3 tofo))
+
+;; result is not (true true), first tofu is not at end of list
+(run* [q]
+  (pmembero 'tofu '(a b tofu d tofu))
+  (== true q))
+;; => (true)
+
+(defn pmembero*
+  [x l]
+  (conde
+   [(emptyo l) u#]
+   [(eq-firsto l x) (resto l '())] ;; this line contributes 1 value
+   [(eq-firsto l x) s#]            ;; this line contributes 2 values
+   [s# (fresh [d]
+         (resto l d)
+         (pmembero* x d))]))
+
+(run* [q]
+  (pmembero* 'tofu '(a b tofu d tofu))
+  (== true q))
+;; => (true true true)
+
+(defn pmembero**
+  [x l]
+  (conde
+   ;; [(emptyo l) u#]               ;; again, lines that always fail can be removed
+   [(eq-firsto l x) (resto l '())]
+   [(eq-firsto l x) (fresh [a d]
+                      (resto l (lcons a d)))]  ;; check to make sure `rest` of l is not empty
+   [s# (fresh [d]
+         (resto l d)
+         (pmembero** x d))]))
+
+(run* [q]
+  (pmembero** 'tofu '(a b tofu d tofu))
+  (== true q))
+;; => (true true)
+
+(run 12 [l]
+  (pmembero** 'tofu l))
+;; => ((tofu)
+;;     (tofu _0 . _1)
+;;     (_0 tofu)
+;;     (_0 tofu _1 . _2)
+;;     (_0 _1 tofu)
+;;     (_0 _1 tofu _2 . _3)
+;;     (_0 _1 _2 tofu)
+;;     (_0 _1 _2 tofu _3 . _4)
+;;     (_0 _1 _2 _3 tofu)
+;;     (_0 _1 _2 _3 tofu _4 . _5)
+;;     (_0 _1 _2 _3 _4 tofu)
+;;     (_0 _1 _2 _3 _4 tofu _5 . _6))
+
+(defn pmembero**-rev
+  [x l]
+  (conde
+   ;; swap these two `conde` lines, results in swapped output
+   [(eq-firsto l x) (fresh [a d]
+                      (resto l (lcons a d)))]
+   [(eq-firsto l x) (resto l '())]
+   [s# (fresh [d]
+         (resto l d)
+         (pmembero**-rev x d))]))
+
+;; Compare these results with the example above
+(run 12 [l]
+  (pmembero**-rev 'tofu l))
+;; => ((tofu _0 . _1)
+;;     (tofu)
+;;     (_0 tofu _1 . _2)
+;;     (_0 tofu)
+;;     (_0 _1 tofu _2 . _3)
+;;     (_0 _1 tofu)
+;;     (_0 _1 _2 tofu _3 . _4)
+;;     (_0 _1 _2 tofu)
+;;     (_0 _1 _2 _3 tofu _4 . _5)
+;;     (_0 _1 _2 _3 tofu)
+;;     (_0 _1 _2 _3 _4 tofu _5 . _6)
+;;     (_0 _1 _2 _3 _4 tofu))
+
+(defn first-value
+  [l]
+  (run 1 [y]
+    (membero y l)))
+
+(first-value '(pasta e fagioli))
+;; => (pasta)
+
+;; This doesn't work in core.logic. `conde` in core.logic is actually the book's
+;; `condi`, and so order of results will vary
+(defn memberrevo
+  [x l]
+  (conde
+   [s# (fresh [d]
+         (resto l d)
+         (memberrevo x d))]
+   [s# (eq-firsto l x)]))
+
+(run* [x]
+  (memberrevo x '(pasta e fagioli)))
+;; => (pasta e fagioli)

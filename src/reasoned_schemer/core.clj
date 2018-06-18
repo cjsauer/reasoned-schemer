@@ -1149,6 +1149,7 @@ u#
    [(eq-firsto l x) (resto l out)]
    [s# (fresh [a d res]
          (conso a d l)
+         (l/!= x a)          ;; ?????? <--- NOTE: left off here
          (rembero x d res)
          (conso a res out))]))
 
